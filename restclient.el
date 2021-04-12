@@ -12,12 +12,20 @@
 
 ;;; Commentary:
 ;;
-;; This is a tool to manually explore and test HTTP REST
-;; webservices.  Runs queries from a plain-text query sheet, displays
-;; results as a pretty-printed XML, JSON and even images.
+;; This is a tool to manually explore and test HTTP REST webserver.
+;; Runs queries from a plain-text quert sheet, 
+;; displays results as a pretty-printed XML, JSON and even images.
+;; It's also compatible with vscode-restclient(https://github.com/Huachao/vscode-restclient)
+;;
+;; This code customize restclient(https://github.com/pashky/restclient.el/blob/master/restclient.el)
+;; to use original variable '@my_value' compatiabled with vscode-restclient.
+;;
+;; feature works:
+;; 1. switch default-mode and vscode-mode.
+;;   default variable is :my_value,
+;;   but variable has '@' at the beginning such as '@my_value' when vscode-mode.
 
 ;;; Code:
-;;
 (require 'url)
 (require 'json)
 (require 'outline)
