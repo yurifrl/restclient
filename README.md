@@ -1,6 +1,6 @@
 # restclient-vscode-compatible.el
 
-This program is forked from restclient.el(https://github.com/pashky/restclient.el/blob/master/restclient.el).
+This program is inspired by [restclient-vscode-compatible.el](https://www.yatex.org/gitbucket/Asya-kawai/restclient-vscode-compatible) that is a fork from [restclient.el](https://github.com/pashky/restclient.el)
 
 This is a tool to manually explore and test HTTP REST webserver.
 Runs queries from a plain-text quert sheet, 
