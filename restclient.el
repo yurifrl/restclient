@@ -13,7 +13,7 @@
 ;;; Commentary:
 ;;
 ;; This is a tool to manually explore and test HTTP REST webserver.
-;; Runs queries from a plain-text quert sheet, 
+;; Runs queries from a plain-text quert sheet,
 ;; displays results as a pretty-printed XML, JSON and even images.
 ;; It's also compatible with vscode-restclient(https://github.com/Huachao/vscode-restclient)
 ;;
@@ -174,6 +174,7 @@
   :type 'integer)
 
 (defconst restclient-comment-separator "#")
+(defconst restclient-variable-prefix "@")
 (defconst restclient-comment-start-regexp (concat "^" restclient-comment-separator))
 (defconst restclient-comment-not-regexp (concat "^[^" restclient-comment-separator "]"))
 (defconst restclient-empty-line-regexp "^\\s-*$")
@@ -182,22 +183,22 @@
   "^\\(GET\\|POST\\|DELETE\\|PUT\\|HEAD\\|OPTIONS\\|PATCH\\) \\(.*\\)$")
 
 (defconst restclient-header-regexp
-  "^\\([^](),/:;@[\\{}= \t]+\\): \\(.*\\)$")
+  (concat "^\\([^](),/:;" restclient-variable-prefix "[\\{}= \t]+\\): \\(.*\\)$"))
 
 (defconst restclient-use-var-regexp
-  "{{\([^{ \n]+\)}}$")
+  (concat "^\\(" restclient-variable-prefix "[^" restclient-variable-prefix " \n]+\\)\\|\{\{[^}]+\}\}$"))
 
 (defconst restclient-var-regexp
-  (concat "^\\(@[^@= ]+\\)[ \t]*\\(:?\\)=[ \t]*\\(<<[ \t]*\n\\(\\(.*\n\\)*?\\)" restclient-comment-separator "\\|\\([^<].*\\)$\\)"))
+  (concat "^\\(" restclient-variable-prefix "[^" restclient-variable-prefix "= ]+\\)[ \t]*\\(:?\\)=[ \t]*\\(<<[ \t]*\n\\(\\(.*\n\\)*?\\)" restclient-comment-separator "\\|\\([^<].*\\)$\\)"))
 
 (defconst restclient-svar-regexp
-  "^\\(@[^@= ]+\\)[ \t]*=[ \t]*\\(.+?\\)$")
+  (concat "^\\(" restclient-variable-prefix "[^" restclient-variable-prefix "= ]+\\)[ \t]*=[ \t]*\\(.+?\\)$"))
 
 (defconst restclient-evar-regexp
-  "^\\(@[^@ ]+\\)[ \t]*:=[ \t]*\\(.+?\\)$")
+  (concat "^\\(" restclient-variable-prefix "[^" restclient-variable-prefix " ]+\\)[ \t]*:=[ \t]*\\(.+?\\)$"))
 
 (defconst restclient-mvar-regexp
-  "^\\(@[^@ ]+\\)[ \t]*:?=[ \t]*\\(<<\\)[ \t]*$")
+  (concat "^\\(" restclient-variable-prefix "[^" restclient-variable-prefix " ]+\\)[ \t]*:?=[ \t]*\\(<<\\)[ \t]*$"))
 
 (defconst restclient-file-regexp
   "^<[ \t]*\\([^<>\n\r]+\\)[ \t]*$")
@@ -314,11 +315,11 @@
 
            ((eq guessed-mode 'js-mode)
             (let ((json-special-chars (remq (assoc ?/ json-special-chars) json-special-chars))
-		  ;; Emacs 27 json.el uses `replace-buffer-contents' for
-		  ;; pretty-printing which is great because it keeps point and
-		  ;; markers intact but can be very slow with huge minimalized
-		  ;; JSON.  We don't need that here.
-		  (json-pretty-print-max-secs 0))
+      ;; Emacs 27 json.el uses `replace-buffer-contents' for
+      ;; pretty-printing which is great because it keeps point and
+      ;; markers intact but can be very slow with huge minimalized
+      ;; JSON.  We don't need that here.
+      (json-pretty-print-max-secs 0))
               (ignore-errors (json-pretty-print-buffer)))
             (restclient-prettify-json-unicode)))
 
@@ -352,7 +353,7 @@ The buffer contains the raw HTTP response sent by the server."
         (unless raw
           (restclient-prettify-response method url))
         (buffer-enable-undo)
-	(restclient-response-mode)
+  (restclient-response-mode)
         (run-hooks 'restclient-response-loaded-hook)
         (if stay-in-window
             (display-buffer (current-buffer) t)
@@ -492,23 +493,23 @@ The buffer contains the raw HTTP response sent by the server."
 (defun restclient-get-var-at-point (var-name buffer-name buffer-pos)
   (message (format "getting var %s form %s at %s" var-name buffer-name buffer-pos))
   (let* ((vars-at-point  (save-excursion
-			   (switch-to-buffer buffer-name)
-			   (goto-char buffer-pos)
-			   ;; if we're called from a restclient buffer we need to lookup vars before the current hook or evar
-			   ;; outside a restclient buffer only globals are available so moving the point wont matter
-			   (re-search-backward "^:\\|->" (point-min) t)
-			   (restclient-find-vars-before-point))))
+         (switch-to-buffer buffer-name)
+         (goto-char buffer-pos)
+         ;; if we're called from a restclient buffer we need to lookup vars before the current hook or evar
+         ;; outside a restclient buffer only globals are available so moving the point wont matter
+         (re-search-backward "^:\\|->" (point-min) t)
+         (restclient-find-vars-before-point))))
     (restclient-replace-all-in-string vars-at-point (cdr (assoc var-name vars-at-point)))))
 
 (defmacro restclient-get-var (var-name)
   (lexical-let ((buf-name (buffer-name (current-buffer)))
-		(buf-point (point)))
+    (buf-point (point)))
     `(restclient-get-var-at-point ,var-name ,buf-name ,buf-point)))
 
 (defun restclient-single-request-function ()
   (dolist (f restclient-curr-request-functions)
     (ignore-errors
-      (funcall f)))  
+      (funcall f)))
   (setq restclient-curr-request-functions nil)
   (remove-hook 'restclient-response-loaded-hook 'restclient-single-request-function))
 
@@ -523,11 +524,11 @@ The buffer contains the raw HTTP response sent by the server."
             (headers '()))
         (forward-line)
         (while (cond
-		((looking-at restclient-response-hook-regexp)
-		 (when-let (hook-function (restclient-parse-hook (match-string-no-properties 2)
-								 (match-end 2)
-								 (match-string-no-properties 3)))
-		   (push hook-function restclient-curr-request-functions)))
+    ((looking-at restclient-response-hook-regexp)
+     (when-let (hook-function (restclient-parse-hook (match-string-no-properties 2)
+                 (match-end 2)
+                 (match-string-no-properties 3)))
+       (push hook-function restclient-curr-request-functions)))
                 ((and (looking-at restclient-header-regexp) (not (looking-at restclient-empty-line-regexp)))
                  (setq headers (cons (restclient-replace-all-in-header vars (restclient-make-header)) headers)))
                 ((looking-at restclient-use-var-regexp)
@@ -535,8 +536,8 @@ The buffer contains the raw HTTP response sent by the server."
           (forward-line))
         (when (looking-at restclient-empty-line-regexp)
           (forward-line))
-	(when restclient-curr-request-functions
-	  (add-hook 'restclient-response-loaded-hook 'restclient-single-request-function))
+  (when restclient-curr-request-functions
+    (add-hook 'restclient-response-loaded-hook 'restclient-single-request-function))
         (let* ((cmax (restclient-current-max))
                (entity (restclient-parse-body (buffer-substring (min (point) cmax) cmax) vars))
                (url (restclient-replace-all-in-string vars url)))
@@ -633,57 +634,57 @@ Optional argument STAY-IN-WINDOW do not move focus to response buffer if t."
   (backward-char 1)
   (setq deactivate-mark nil))
 
-(defun restclient-show-info ()  
+(defun restclient-show-info ()
   ;; restclient-info-buffer-name
   (interactive)
   (let ((vars-at-point (restclient-find-vars-before-point)))
     (cl-labels ((non-overidden-vars-at-point ()
-					     (seq-filter (lambda (v)
-							   (null (assoc (car v) restclient-var-overrides)))
-							 vars-at-point))
-		(sanitize-value-cell (var-value)
-		     (replace-regexp-in-string "\n" "|\n| |"
-			       (replace-regexp-in-string "\|" "\\\\vert{}"
-					 (restclient-replace-all-in-string vars-at-point var-value))))
-		(var-row (var-name var-value)
-			 (insert "|" var-name "|" (sanitize-value-cell var-value) "|\n"))
-		(var-table (table-name)
-			   (insert (format "* %s \n|--|\n|Name|Value|\n|---|\n" table-name)))
-		(var-table-footer ()
-				  (insert "|--|\n\n")))
-      
+               (seq-filter (lambda (v)
+                 (null (assoc (car v) restclient-var-overrides)))
+               vars-at-point))
+    (sanitize-value-cell (var-value)
+         (replace-regexp-in-string "\n" "|\n| |"
+             (replace-regexp-in-string "\|" "\\\\vert{}"
+           (restclient-replace-all-in-string vars-at-point var-value))))
+    (var-row (var-name var-value)
+       (insert "|" var-name "|" (sanitize-value-cell var-value) "|\n"))
+    (var-table (table-name)
+         (insert (format "* %s \n|--|\n|Name|Value|\n|---|\n" table-name)))
+    (var-table-footer ()
+          (insert "|--|\n\n")))
+
       (with-current-buffer (get-buffer-create restclient-info-buffer-name)
-	;; insert our info
-	(erase-buffer)
+  ;; insert our info
+  (erase-buffer)
 
-	(insert "\Restclient Info\ \n\n")
-       
-	(var-table "Dynamic Variables")
-	(dolist (dv restclient-var-overrides)
-	  (var-row (car dv) (cdr dv)))
-	(var-table-footer)
+  (insert "\Restclient Info\ \n\n")
 
-	;;    (insert ":Info:\n Dynamic vars defined by request hooks or with calls to restclient-set-var\n:END:")
+  (var-table "Dynamic Variables")
+  (dolist (dv restclient-var-overrides)
+    (var-row (car dv) (cdr dv)))
+  (var-table-footer)
 
-	(var-table "Vars at current position")
-	(dolist (dv (non-overidden-vars-at-point))
-	  (var-row (car dv) (cdr dv)))
-	(var-table-footer)
+  ;;    (insert ":Info:\n Dynamic vars defined by request hooks or with calls to restclient-set-var\n:END:")
+
+  (var-table "Vars at current position")
+  (dolist (dv (non-overidden-vars-at-point))
+    (var-row (car dv) (cdr dv)))
+  (var-table-footer)
 
 
-	;; registered callbacks
-	(var-table "Registered request hook types")
-	(dolist (handler-name (delete-dups (mapcar 'car restclient-result-handlers)))
-	       (var-row handler-name (cddr (assoc handler-name restclient-result-handlers))))
-    	(var-table-footer)
+  ;; registered callbacks
+  (var-table "Registered request hook types")
+  (dolist (handler-name (delete-dups (mapcar 'car restclient-result-handlers)))
+         (var-row handler-name (cddr (assoc handler-name restclient-result-handlers))))
+      (var-table-footer)
 
-	(insert "\n\n'q' to exit\n")
-	(org-mode)
-	(org-toggle-pretty-entities)
-	(org-table-iterate-buffer-tables)
-	(outline-show-all)
-	(restclient-response-mode)
-	(goto-char (point-min))))
+  (insert "\n\n'q' to exit\n")
+  (org-mode)
+  (org-toggle-pretty-entities)
+  (org-table-iterate-buffer-tables)
+  (outline-show-all)
+  (restclient-response-mode)
+  (goto-char (point-min))))
     (switch-to-buffer-other-window restclient-info-buffer-name)))
 
 (defun restclient-narrow-to-current ()
@@ -702,7 +703,7 @@ Optional argument STAY-IN-WINDOW do not move focus to response buffer if t."
         (end-of-line)
         ;; If the overlays at this point have 'invisible set, toggling
         ;; must make the region visible. Else it must hide the region
-        
+
         ;; This part of code is from org-hide-block-toggle method of
         ;; Org mode
         (let ((overlays (overlays-at (point))))
@@ -726,9 +727,9 @@ Optional argument STAY-IN-WINDOW do not move focus to response buffer if t."
         (list restclient-use-var-regexp '(1 'restclient-variable-usage-face))
         (list restclient-file-regexp '(0 'restclient-file-upload-face))
         (list restclient-header-regexp '(1 'restclient-header-name-face t) '(2 'restclient-header-value-face t))
-	(list restclient-response-hook-regexp '(1 ' restclient-request-hook-face t)
-	      '(2 'restclient-request-hook-name-face t)
-	      '(3 'restclient-request-hook-args-face t))))
+  (list restclient-response-hook-regexp '(1 ' restclient-request-hook-face t)
+        '(2 'restclient-request-hook-name-face t)
+        '(3 'restclient-request-hook-args-face t))))
 
 (defconst restclient-mode-syntax-table
   (let ((table (make-syntax-table)))
@@ -746,7 +747,7 @@ Optional argument STAY-IN-WINDOW do not move focus to response buffer if t."
     (define-key map (kbd "C-c C-.") 'restclient-mark-current)
     (define-key map (kbd "C-c C-u") 'restclient-copy-curl-command)
     (define-key map (kbd "C-c n n") 'restclient-narrow-to-current)
-    (define-key map (kbd "C-c C-i") 'restclient-show-info)   
+    (define-key map (kbd "C-c C-i") 'restclient-show-info)
     map)
   "Keymap for restclient-mode.")
 
@@ -763,8 +764,8 @@ Optional argument STAY-IN-WINDOW do not move focus to response buffer if t."
   :init-value nil
   :lighter nil
   :keymap '(("q" . (lambda ()
-		     (interactive)
-		     (quit-window (get-buffer-window (current-buffer))))))
+         (interactive)
+         (quit-window (get-buffer-window (current-buffer))))))
   :group 'restclient)
 
 ;;;###autoload

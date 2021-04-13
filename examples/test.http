@@ -1,0 +1,76 @@
+# (defconst restclient-use-var-regexp "^\\(@[^@ \n]+\\)$")
+
+# (defconst restclient-method-url-regexp
+#   "^\\(GET\\|POST\\|DELETE\\|PUT\\|HEAD\\|OPTIONS\\|PATCH\\) \\(.*\\)$\\|\{\{[^}]+\}\}")
+
+# (re-search-forward restclient-use-var-regexp)
+# (re-search-forward restclient-method-url-regexp)
+
+(defun restclient-parser-url (vars string)
+       (print vars) )
+
+
+
+(defun restclient-parser-url (replacements string)
+  (if replacements
+      (print replacements)
+      (let ((current string)
+            (pass restclient-vars-max-passes)
+            (continue t))
+        (while (and continue (> pass 0))
+          (setq pass (- pass 1))
+          (print (mapcar 'car replacements))
+          (setq current (replace-regexp-in-string "\{\{[^}]+\}\}"
+                                                  (lambda (key)
+                                                    (print (cdr (assoc key replacements)))
+                                                    (setq continue t)
+                                                    (cdr (assoc key replacements)))
+                                                  current t t)))
+        current)
+    string))
+
+(restclient-parser-url x "{{test}}")
+;; (setq x '(("@test" . "asdads")))
+;; (setq x '(("{{tests}}" . "asdads"))
+(restclient-parser-url x "@test")
+
+(defun restclient-http-parse-current-and-do (func &rest args)
+  (save-excursion
+    (goto-char (restclient-current-min))
+    (when (re-search-forward restclient-method-url-regexp (point-max) t)
+      (let ((method (match-string-no-properties 1))
+            (url (match-string-no-properties 2))
+            (vars (restclient-find-vars-before-point))
+            (headers '()))
+            (restclient-parser-url vars url)
+        (forward-line)
+        (while (cond
+		((looking-at restclient-response-hook-regexp)
+		 (when-let (hook-function (restclient-parse-hook (match-string-no-properties 2)
+								 (match-end 2)
+								 (match-string-no-properties 3)))
+		   (push hook-function restclient-curr-request-functions)))
+                ((and (looking-at restclient-header-regexp) (not (looking-at restclient-empty-line-regexp)))
+                 (setq headers (cons (restclient-replace-all-in-header vars (restclient-make-header)) headers)))
+                ((looking-at restclient-use-var-regexp)
+                 (setq headers (append headers (restclient-parse-headers (restclient-replace-all-in-string vars (match-string 1)))))))
+          (forward-line))
+        (when (looking-at restclient-empty-line-regexp)
+          (forward-line))
+	(when restclient-curr-request-functions
+	  (add-hook 'restclient-response-loaded-hook 'restclient-single-request-function))
+        (let* ((cmax (restclient-current-max))
+               (entity (restclient-parse-body (buffer-substring (min (point) cmax) cmax) vars))
+               (url (restclient-replace-all-in-string vars url)))
+          (apply func method url headers entity args))))))
+
+
+
+
+@test = http://httpbin.org/post
+POST {{test}}
+@test
+
+@test = http://httpbin.org/post
+POST http://httpbin.org/post
+@test
